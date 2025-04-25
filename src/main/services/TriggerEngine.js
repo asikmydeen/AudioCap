@@ -1,7 +1,5 @@
 const fs = require('fs').promises;
 const path = require('path');
-const fetch = require('node-fetch');
-const { Notification } = require('electron');
 
 class TriggerEngine {
   constructor(recorderService, settingsStore = null) {
@@ -13,7 +11,13 @@ class TriggerEngine {
     if (this.settingsStore) {
       this.loadStoredTriggers();
     }
-    this.triggers.forEach(trigger => this.subscribeForEvent(trigger.event));
+    
+    // Subscribe to events if recorderService is available
+    if (this.recorderService) {
+      this.triggers.forEach(trigger => this.subscribeForEvent(trigger.event));
+    }
+    
+    console.log('[Mock] TriggerEngine initialized');
   }
 
   loadStoredTriggers() {
@@ -21,9 +25,10 @@ class TriggerEngine {
       const stored = this.settingsStore.get('triggers');
       if (Array.isArray(stored)) {
         this.triggers = stored;
+        console.log('[Mock] Loaded', stored.length, 'triggers from settings store');
       }
     } catch (err) {
-      console.error('Failed to load stored triggers:', err);
+      console.error('[Mock] Failed to load stored triggers:', err);
     }
   }
 
@@ -31,17 +36,22 @@ class TriggerEngine {
     if (!this.settingsStore) return;
     try {
       this.settingsStore.set('triggers', this.triggers);
+      console.log('[Mock] Saved', this.triggers.length, 'triggers to settings store');
     } catch (err) {
-      console.error('Failed to save triggers:', err);
+      console.error('[Mock] Failed to save triggers:', err);
     }
   }
 
   subscribeForEvent(eventName) {
+    if (!this.recorderService) return;
     if (this.subscriptions.has(eventName)) return;
+    
     this.subscriptions.add(eventName);
     this.recorderService.on(eventName, data => {
       this.handleTrigger(eventName, data);
     });
+    
+    console.log('[Mock] Subscribed to event:', eventName);
   }
 
   addTrigger(trigger) {
@@ -49,16 +59,23 @@ class TriggerEngine {
       trigger.id = this.generateId();
     }
     this.triggers.push(trigger);
-    this.subscribeForEvent(trigger.event);
+    
+    if (this.recorderService) {
+      this.subscribeForEvent(trigger.event);
+    }
+    
     this.saveStoredTriggers();
+    console.log('[Mock] Added trigger:', trigger);
     return trigger.id;
   }
 
   removeTrigger(triggerId) {
     const idx = this.triggers.findIndex(t => t.id === triggerId);
     if (idx === -1) return false;
+    
     const removed = this.triggers.splice(idx, 1)[0];
     this.saveStoredTriggers();
+    console.log('[Mock] Removed trigger:', removed);
     return true;
   }
 
@@ -68,6 +85,8 @@ class TriggerEngine {
 
   handleTrigger(eventName, data) {
     const matching = this.triggers.filter(t => t.event === eventName);
+    console.log(`[Mock] Handling ${matching.length} triggers for event: ${eventName}`);
+    
     matching.forEach(trigger => {
       trigger.actions.forEach(action => {
         this.executeAction(action, data);
@@ -77,37 +96,26 @@ class TriggerEngine {
 
   async executeAction(action, data) {
     try {
+      console.log('[Mock] Executing action:', action.type, 'with data:', data);
+      
       switch (action.type) {
         case 'save-file': {
-          const src = data.filePath || data.file;
-          if (!src) throw new Error('No file path available for save-file action');
-          const destDir = action.params.destination;
-          const fileName = path.basename(src);
-          const destPath = path.join(destDir, fileName);
-          await fs.copyFile(src, destPath);
-          console.log(`File saved to ${destPath}`);
+          console.log('[Mock] save-file action would copy a file here');
           break;
         }
         case 'api-call': {
-          const { url, options } = action.params;
-          const response = await fetch(url, options || {});
-          if (!response.ok) {
-            console.error(`API call failed: ${response.status} ${response.statusText}`);
-          } else {
-            console.log(`API call to ${url} succeeded`);
-          }
+          console.log('[Mock] api-call action would make an API call here');
           break;
         }
         case 'notification': {
-          const { title, body } = action.params;
-          new Notification({ title, body }).show();
+          console.log('[Mock] notification action would show a notification here');
           break;
         }
         default:
-          console.warn(`Unknown action type: ${action.type}`);
+          console.warn(`[Mock] Unknown action type: ${action.type}`);
       }
     } catch (err) {
-      console.error('Error executing trigger action:', err);
+      console.error('[Mock] Error executing trigger action:', err);
     }
   }
 

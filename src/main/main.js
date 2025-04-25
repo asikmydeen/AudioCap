@@ -1,24 +1,25 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
+const os = require('os');
 
 // Service modules
-const AudioSourceManager = require('./services/AudioSourceManager');
+const audioSourceManager = require('./services/AudioSourceManager');
 const RecorderService = require('./services/RecorderService');
-const SettingsStore = require('./services/SettingsStore');
-const TriggerEngine = require('./services/TriggerEngine');
+const settingsStore = require('./services/SettingsStore');
 
 // Instantiate services
-const audioSourceManager = new AudioSourceManager();
 const recorderService = new RecorderService();
-const settingsStore = new SettingsStore();
-const triggerEngine = new TriggerEngine();
+
+// TriggerEngine is instantiated after other services
+const TriggerEngine = require('./services/TriggerEngine');
+const triggerEngine = new TriggerEngine(recorderService, settingsStore);
 
 let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 900,
+    height: 700,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -28,6 +29,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
+  // Open DevTools by default for debugging
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
@@ -58,6 +60,24 @@ function createWindow() {
         { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
         { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
         { type: 'separator' }, { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Audio',
+      submenu: [
+        {
+          label: 'Refresh Audio Devices',
+          click: () => {
+            audioSourceManager.refresh();
+            mainWindow.webContents.send('refresh-devices');
+          }
+        },
+        {
+          label: 'System Audio Setup Guide',
+          click: () => {
+            mainWindow.webContents.send('show-system-audio-guide');
+          }
+        }
       ]
     },
     {
@@ -92,33 +112,73 @@ app.on('activate', () => {
 
 // IPC handlers
 ipcMain.handle('get-audio-sources', async () => {
-  return audioSourceManager.getSources();
+  console.log("[IPC] Requested audio sources");
+  const sources = audioSourceManager.getSources();
+  console.log("[IPC] Returning sources:", sources);
+  return sources;
+});
+
+ipcMain.handle('get-system-audio-info', async () => {
+  console.log("[IPC] Requested system audio information");
+  const info = audioSourceManager.getSystemAudioCaptureInstructions();
+  console.log("[IPC] Returning system audio info:", info);
+  return info;
 });
 
 ipcMain.handle('start-recording', async (event, options) => {
-  return recorderService.startRecording(options);
+  console.log("[IPC] Starting recording with options:", options);
+  const id = recorderService.startRecording(options);
+  return id ? { success: true, id } : { success: false, message: "Failed to start recording" };
 });
 
 ipcMain.handle('stop-recording', async (event, recordingId) => {
+  console.log("[IPC] Stopping recording:", recordingId);
   return recorderService.stopRecording(recordingId);
 });
 
+ipcMain.handle('get-active-recordings', async () => {
+  console.log("[IPC] Getting active recordings");
+  return recorderService.getActiveRecordings();
+});
+
 ipcMain.handle('save-settings', async (event, settings) => {
-  return settingsStore.save(settings);
+  console.log("[IPC] Saving settings:", settings);
+  settingsStore.set('settings', settings);
+  return true;
 });
 
 ipcMain.handle('get-settings', async () => {
-  return settingsStore.get();
+  console.log("[IPC] Getting settings");
+  const settings = settingsStore.get('settings') || {};
+  console.log("[IPC] Returning settings:", settings);
+  return settings;
 });
 
 ipcMain.handle('add-trigger', async (event, triggerConfig) => {
+  console.log("[IPC] Adding trigger:", triggerConfig);
   return triggerEngine.addTrigger(triggerConfig);
 });
 
 ipcMain.handle('remove-trigger', async (event, triggerId) => {
+  console.log("[IPC] Removing trigger:", triggerId);
   return triggerEngine.removeTrigger(triggerId);
 });
 
 ipcMain.handle('list-triggers', async () => {
-  return triggerEngine.getTriggers();
+  console.log("[IPC] Listing triggers");
+  const triggers = triggerEngine.listTriggers();
+  console.log("[IPC] Returning triggers:", triggers);
+  return triggers;
+});
+
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Recordings Folder'
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
 });

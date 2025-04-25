@@ -3,9 +3,6 @@
 // Renderer process UI logic
 // Uses the secure API exposed via preload (window.api)
 
-// Module imports
-const path = require('path');
-
 // DOM Elements
 const audioSourceSelect = document.getElementById('audio-source-select');
 const recordButton = document.getElementById('record-button');
@@ -54,35 +51,58 @@ let recordingsData = [];
 
 // Initialize the application
 async function initialize() {
-  // Load settings
-  currentSettings = await window.api.invoke('get-settings');
+  console.log('Initializing application...');
   
-  // Load audio sources
-  loadAudioSources();
-  
-  // Set default format from settings
-  formatSelect.value = currentSettings.defaultFormat;
-  
-  // Initialize canvas for visualization
-  initializeVisualizer();
-  
-  // Apply settings to form elements
-  defaultFormatSelect.value = currentSettings.defaultFormat;
-  defaultSavePathInput.value = currentSettings.defaultSavePath;
-  
-  // Set up transcription toggle based on settings
-  transcriptionToggle.checked = currentSettings.transcriptionEnabled;
-  if (currentSettings.transcriptionEnabled) {
-    transcriptionSettings.classList.remove('hidden');
-    document.getElementById('api-key').value = currentSettings.transcriptionApiKey || '';
-    document.getElementById('api-url').value = currentSettings.transcriptionApiUrl || '';
+  try {
+    // Load settings
+    currentSettings = await window.api.invoke('get-settings');
+    console.log('Loaded settings:', currentSettings);
+    
+    // Load audio sources
+    await loadAudioSources();
+    
+    // Set default format from settings
+    if (currentSettings.defaultFormat) {
+      formatSelect.value = currentSettings.defaultFormat;
+    }
+    
+    // Initialize canvas for visualization
+    initializeVisualizer();
+    
+    // Apply settings to form elements
+    if (currentSettings.defaultFormat) {
+      defaultFormatSelect.value = currentSettings.defaultFormat;
+    }
+    if (currentSettings.savePath) {
+      defaultSavePathInput.value = currentSettings.savePath;
+    }
+    
+    // Set up transcription toggle based on settings
+    if (currentSettings.transcription) {
+      transcriptionToggle.checked = currentSettings.transcription.enabled;
+      if (currentSettings.transcription.enabled) {
+        transcriptionSettings.classList.remove('hidden');
+        if (currentSettings.transcription.apiKey) {
+          document.getElementById('api-key').value = currentSettings.transcription.apiKey;
+        }
+        if (currentSettings.transcription.apiUrl) {
+          document.getElementById('api-url').value = currentSettings.transcription.apiUrl;
+        }
+      }
+    }
+    
+    console.log('Application initialized successfully');
+  } catch (error) {
+    console.error('Error during initialization:', error);
   }
 }
 
 // Load available audio sources from the main process
 async function loadAudioSources() {
   try {
+    console.log('Loading audio sources...');
     const sources = await window.api.invoke('get-audio-sources');
+    console.log('Loaded sources:', sources);
     
     // Clear existing options (except the placeholder)
     while (audioSourceSelect.options.length > 1) {
@@ -128,13 +148,16 @@ async function startRecording() {
   }
   
   try {
+    console.log('Starting recording...');
     const options = {
-      sourceId: audioSourceSelect.value,
+      deviceId: audioSourceSelect.value,
       format: formatSelect.value,
-      savePath: currentSettings.defaultSavePath
+      savePath: currentSettings.savePath || ''
     };
     
+    console.log('Recording options:', options);
     const result = await window.api.invoke('start-recording', options);
+    console.log('Recording started:', result);
     
     if (result.success) {
       isRecording = true;
@@ -163,7 +186,9 @@ async function stopRecording() {
   if (!isRecording) return;
   
   try {
+    console.log('Stopping recording:', recordingId);
     const result = await window.api.invoke('stop-recording', recordingId);
+    console.log('Recording stopped:', result);
     
     if (result.success) {
       isRecording = false;
@@ -177,9 +202,7 @@ async function stopRecording() {
       
       stopVisualization();
       
-      addRecordingToList(recordingId, result.path);
-      
-      executeTriggers('recording-stopped');
+      addRecordingToList(result.id, result.path);
       
       recordingId = null;
       recordingStartTime = null;
@@ -248,7 +271,8 @@ function stopVisualization() {
 
 // Add a recording to the list
 function addRecordingToList(id, filePath) {
-  const fileName = path.basename(filePath);
+  // Extract filename from path (handle both Windows and Unix paths)
+  const fileName = filePath.split(/[\/\\]/).pop();
   const date = new Date().toLocaleString();
   
   const li = document.createElement('li');
@@ -288,52 +312,48 @@ function addRecordingToList(id, filePath) {
   recordingsData.push({ id, path: filePath, date });
 }
 
-// Execute automation triggers
-function executeTriggers(eventType, data = {}) {
-  triggers.forEach(trigger => {
-    if (trigger.event === eventType) {
-      console.log(`Executing trigger: ${trigger.event} -> ${trigger.action}`);
-      switch (trigger.action) {
-        case 'save-file':
-          console.log('Saving file with options:', trigger.options);
-          break;
-        case 'api-call':
-          if (trigger.options && trigger.options.endpoint) {
-            console.log(`${trigger.options.method || 'POST'} request to ${trigger.options.endpoint}`);
-          }
-          break;
-        case 'notification':
-          new Notification('AudioCap', { body: `Trigger executed: ${trigger.event}` });
-          break;
-      }
-    }
-  });
-}
-
 // Event Listeners
 recordButton.addEventListener('click', startRecording);
 stopButton.addEventListener('click', stopRecording);
 transcriptionToggle.addEventListener('change', () => {
   if (transcriptionToggle.checked) transcriptionSettings.classList.remove('hidden');
   else transcriptionSettings.classList.add('hidden');
-  currentSettings.transcriptionEnabled = transcriptionToggle.checked;
+  
+  if (!currentSettings.transcription) currentSettings.transcription = {};
+  currentSettings.transcription.enabled = transcriptionToggle.checked;
   window.api.invoke('save-settings', currentSettings);
 });
+
 addTriggerButton.addEventListener('click', () => { triggerModal.style.display = 'block'; });
 triggerEventSelect.addEventListener('change', () => { keywordInput.style.display = triggerEventSelect.value === 'keyword-detected' ? 'block' : 'none'; });
 triggerActionSelect.addEventListener('change', () => { apiDetails.style.display = triggerActionSelect.value === 'api-call' ? 'block' : 'none'; });
 triggerForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const newTrigger = { id: Date.now().toString(), event: triggerEventSelect.value, action: triggerActionSelect.value, options: {} };
-  if (newTrigger.event === 'keyword-detected') newTrigger.options.keyword = document.getElementById('trigger-keyword').value;
-  if (newTrigger.action === 'api-call') {
-    newTrigger.options.endpoint = document.getElementById('api-endpoint').value;
-    newTrigger.options.method = document.getElementById('api-method').value;
+  const newTrigger = { 
+    id: Date.now().toString(), 
+    event: triggerEventSelect.value, 
+    actions: [{ 
+      type: triggerActionSelect.value,
+      params: {}
+    }]
+  };
+  
+  if (newTrigger.event === 'keyword-detected') {
+    newTrigger.actions[0].params.keyword = document.getElementById('trigger-keyword').value;
   }
-  triggers.push(newTrigger);
-  addTriggerToList(newTrigger);
-  triggerModal.style.display = 'none';
-  triggerForm.reset();
+  
+  if (newTrigger.actions[0].type === 'api-call') {
+    newTrigger.actions[0].params.url = document.getElementById('api-endpoint').value;
+    newTrigger.actions[0].params.method = document.getElementById('api-method').value;
+  }
+  
+  window.api.invoke('add-trigger', newTrigger).then(id => {
+    console.log('Added trigger with ID:', id);
+    triggers.push(newTrigger);
+    addTriggerToList(newTrigger);
+    triggerModal.style.display = 'none';
+    triggerForm.reset();
+  });
 });
 
 function addTriggerToList(trigger) {
@@ -342,23 +362,29 @@ function addTriggerToList(trigger) {
   switch (trigger.event) {
     case 'recording-stopped': description += 'When recording stops'; break;
     case 'silence-detected': description += 'When silence is detected'; break;
-    case 'keyword-detected': description += `When keyword "${trigger.options.keyword}" is detected`; break;
+    case 'keyword-detected': description += `When keyword "${trigger.options?.keyword || 'any'}" is detected`; break;
   }
   description += ' → ';
-  switch (trigger.action) {
+  switch (trigger.actions[0].type) {
     case 'save-file': description += 'Save file'; break;
-    case 'api-call': description += `Make ${trigger.options.method} request to ${trigger.options.endpoint}`; break;
+    case 'api-call': description += `Make ${trigger.actions[0].params?.method || 'POST'} request to ${trigger.actions[0].params?.url || 'API endpoint'}`; break;
     case 'notification': description += 'Show notification'; break;
   }
   li.textContent = description;
+  
   const deleteButton = document.createElement('button');
   deleteButton.textContent = 'Remove';
   deleteButton.classList.add('secondary-button');
   deleteButton.style.marginLeft = '10px';
   deleteButton.addEventListener('click', () => {
-    triggersList.removeChild(li);
-    triggers = triggers.filter(t => t.id !== trigger.id);
+    window.api.invoke('remove-trigger', trigger.id).then(success => {
+      if (success) {
+        triggersList.removeChild(li);
+        triggers = triggers.filter(t => t.id !== trigger.id);
+      }
+    });
   });
+  
   li.appendChild(deleteButton);
   triggersList.appendChild(li);
 }
@@ -366,16 +392,23 @@ function addTriggerToList(trigger) {
 settingsForm.addEventListener('submit', (e) => {
   e.preventDefault();
   currentSettings.defaultFormat = defaultFormatSelect.value;
-  currentSettings.defaultSavePath = defaultSavePathInput.value;
-  window.api.invoke('save-settings', currentSettings);
-  settingsModal.style.display = 'none';
+  currentSettings.savePath = defaultSavePathInput.value;
+  window.api.invoke('save-settings', currentSettings).then(() => {
+    settingsModal.style.display = 'none';
+  });
 });
+
 cancelSettingsButton.addEventListener('click', () => {
-  defaultFormatSelect.value = currentSettings.defaultFormat;
-  defaultSavePathInput.value = currentSettings.defaultSavePath;
+  defaultFormatSelect.value = currentSettings.defaultFormat || 'wav';
+  defaultSavePathInput.value = currentSettings.savePath || '';
   settingsModal.style.display = 'none';
 });
-cancelTriggerButton.addEventListener('click', () => { triggerForm.reset(); triggerModal.style.display = 'none'; });
+
+cancelTriggerButton.addEventListener('click', () => { 
+  triggerForm.reset(); 
+  triggerModal.style.display = 'none'; 
+});
+
 settingsCloseButton.addEventListener('click', () => { settingsModal.style.display = 'none'; });
 triggerCloseButton.addEventListener('click', () => { triggerModal.style.display = 'none'; });
 aboutCloseButton.addEventListener('click', () => { aboutModal.style.display = 'none'; });
@@ -386,11 +419,15 @@ window.addEventListener('click', (e) => {
   else if (e.target === aboutModal) aboutModal.style.display = 'none';
 });
 
-browseButton.addEventListener('click', () => {
-  defaultSavePathInput.value = path.join(require('os').homedir(), 'AudioCap', 'Recordings');
+browseButton.addEventListener('click', async () => {
+  // In a real app, this would use dialog API via IPC
+  // For mock version, just set a default path
+  defaultSavePathInput.value = '/Users/username/AudioCap/Recordings';
 });
 
+// Listen for events from main process
 window.api.on('open-settings', () => { settingsModal.style.display = 'block'; });
 window.api.on('open-about', () => { aboutModal.style.display = 'block'; });
 
+// Initialize the app when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', initialize);
