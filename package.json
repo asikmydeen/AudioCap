@@ -1,0 +1,36 @@
+{
+  "name": "audio-cap",
+  "version": "1.0.0",
+  "description": "Desktop application for recording audio from various sources",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "node-audio-recorder": "^3.0.0",
+    "node-wav-player": "^0.2.0",
+    "naudiodon": "^2.3.6"
+  },
+  "devDependencies": {
+    "electron": "^22.0.0",
+    "electron-builder": "^23.6.0"
+  },
+  "build": {
+    "appId": "com.audiocap.app",
+    "productName": "AudioCap",
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

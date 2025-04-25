@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AudioCap</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>AudioCap</h1>
+      <p>Advanced Audio Recording Tool</p>
+    </header>
+
+    <main>
+      <div class="card source-selection">
+        <h2>Audio Source</h2>
+        <select id="audio-source-select">
+          <option value="" disabled selected>Select an audio source</option>
+        </select>
+      </div>
+
+      <div class="card recording-controls">
+        <h2>Recording Controls</h2>
+        <div class="controls">
+          <button id="record-button" class="primary-button">Record</button>
+          <button id="stop-button" class="secondary-button" disabled>Stop</button>
+        </div>
+        <div class="time-display">00:00:00</div>
+        <div class="format-selection">
+          <label for="format-select">Format:</label>
+          <select id="format-select">
+            <option value="wav">WAV</option>
+            <option value="mp3">MP3</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card visualization">
+        <h2>Audio Visualization</h2>
+        <canvas id="visualizer"></canvas>
+      </div>
+
+      <div class="card recordings-list">
+        <h2>Recent Recordings</h2>
+        <ul id="recordings-list"></ul>
+      </div>
+
+      <div class="card transcription-section">
+        <h2>Transcription</h2>
+        <p>Connect to a transcription API to convert audio to text.</p>
+        <div class="transcription-toggle">
+          <label class="switch">
+            <input type="checkbox" id="transcription-toggle">
+            <span class="slider round"></span>
+          </label>
+          <span>Enable Transcription</span>
+        </div>
+        <div id="transcription-settings" class="hidden">
+          <label for="api-key">API Key:</label>
+          <input type="password" id="api-key" placeholder="Enter API Key">
+          <label for="api-url">API URL:</label>
+          <input type="url" id="api-url" placeholder="https://api.example.com/transcribe">
+        </div>
+        <div id="transcription-results" class="hidden">
+          <h3>Transcription Results</h3>
+          <div id="transcription-text"></div>
+        </div>
+      </div>
+
+      <div class="card automation-section">
+        <h2>Automation</h2>
+        <p>Set up automation triggers for your recordings.</p>
+        <button id="add-trigger" class="secondary-button">Add Trigger</button>
+        <ul id="triggers-list"></ul>
+      </div>
+    </main>
+  </div>
+
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Settings</h2>
+      <form id="settings-form">
+        <div class="form-group">
+          <label for="default-format">Default Format:</label>
+          <select id="default-format">
+            <option value="wav">WAV</option>
+            <option value="mp3">MP3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="default-save-path">Default Save Location:</label>
+          <div class="path-input">
+            <input type="text" id="default-save-path" readonly>
+            <button type="button" id="browse-button">Browse</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="primary-button">Save</button>
+          <button type="button" class="secondary-button" id="cancel-settings">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="trigger-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Add Trigger</h2>
+      <form id="trigger-form">
+        <div class="form-group">
+          <label for="trigger-event">Event:</label>
+          <select id="trigger-event">
+            <option value="recording-stopped">Recording Stopped</option>
+            <option value="silence-detected">Silence Detected</option>
+            <option value="keyword-detected">Keyword Detected</option>
+          </select>
+        </div>
+        <div class="form-group" id="keyword-input" style="display: none;">
+          <label for="trigger-keyword">Keyword:</label>
+          <input type="text" id="trigger-keyword" placeholder="Enter keyword">
+        </div>
+        <div class="form-group">
+          <label for="trigger-action">Action:</label>
+          <select id="trigger-action">
+            <option value="save-file">Save File</option>
+            <option value="api-call">API Call</option>
+            <option value="notification">Show Notification</option>
+          </select>
+        </div>
+        <div class="form-group" id="api-details" style="display: none;">
+          <label for="api-endpoint">API Endpoint:</label>
+          <input type="url" id="api-endpoint" placeholder="https://api.example.com/webhook">
+          <label for="api-method">Method:</label>
+          <select id="api-method">
+            <option value="POST">POST</option>
+            <option value="GET">GET</option>
+            <option value="PUT">PUT</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="primary-button">Save Trigger</button>
+          <button type="button" class="secondary-button" id="cancel-trigger">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="about-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>About AudioCap</h2>
+      <p>AudioCap is a powerful desktop application for recording audio from various sources.</p>
+      <p>Version: 1.0.0</p>
+      <p>&copy; 2025 AudioCap</p>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
